@@ -2,6 +2,8 @@ use serde::Serialize;
 use std::mem;
 use thiserror::Error;
 
+pub struct SolSignature(pub [u8; 64]);
+
 #[derive(Error, Debug, Serialize, Clone, PartialEq, Eq)]
 pub enum ParseSolSignatureError {
     #[error("String is the wrong size")]
@@ -9,8 +11,6 @@ pub enum ParseSolSignatureError {
     #[error("Invalid Base58 string")]
     Invalid,
 }
-
-pub struct SolSignature(pub(crate) [u8; 64]);
 
 impl TryFrom<Vec<u8>> for SolSignature {
     type Error = ParseSolSignatureError;

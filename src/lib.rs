@@ -1,23 +1,23 @@
-use message::SiwsMessage;
+use pubkey::SolPubkey;
 
 pub mod message;
 pub mod pubkey;
 pub mod signature;
 
+pub struct SolAccount {
+    pub public_key: SolPubkey,
+}
+
 pub struct SiwsOutput {
-    pub account: String,
+    pub account: SolAccount,
     pub signed_message: Vec<u8>,
     pub signature: Vec<u8>,
 }
 
-impl From<&SiwsOutput> for SiwsMessage {
-    fn from(value: &SiwsOutput) -> Self {
-        todo!()
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use crate::message::*;
     use ed25519_dalek::{ed25519::signature::SignerMut, Keypair};
     use rand::rngs::OsRng;
@@ -67,6 +67,15 @@ mod tests {
             version: None,
         };
 
-        println!("{}", String::from(&msg));
+        let msg_string = String::from(&msg);
+        println!("{}", msg_string);
+
+        let msg2 = match SiwsMessage::from_str(&msg_string) {
+            Ok(v) => v,
+            Err(_) => todo!(),
+        };
+
+        assert_eq!(msg.domain, msg2.domain);
+        assert_eq!(msg.address, msg2.address);
     }
 }

@@ -1,7 +1,19 @@
 use ed25519_dalek::{PublicKey, Signature};
 use std::{fmt, str::FromStr};
+use thiserror::Error;
 
 use crate::{pubkey::*, signature::*};
+
+const PREAMBLE: &str = " wants you to sign in with your Solana account:";
+const URI_TAG: &str = "URI: ";
+const VERSION_TAG: &str = "Version: ";
+const CHAIN_TAG: &str = "Chain ID: ";
+const NONCE_TAG: &str = "Nonce: ";
+const IAT_TAG: &str = "Issued At: ";
+const EXP_TAG: &str = "Expiration Time: ";
+const NBF_TAG: &str = "Not Before: ";
+const RID_TAG: &str = "Request ID: ";
+const RES_TAG: &str = "Resources:";
 
 #[derive(Default)]
 pub struct SiwsMessage {
@@ -45,8 +57,9 @@ pub struct SiwsMessage {
 impl SiwsMessage {
     pub fn verify(&self, signature: &str) -> Result<bool, SolError> {
         let message_string: String = self.into();
-        
-        let signature = SolSignature::from_str(signature).map_err(|_| SolError::InvalidSignature)?;
+
+        let signature =
+            SolSignature::from_str(signature).map_err(|_| SolError::InvalidSignature)?;
 
         let pub_key = SolPubkey::from_str(&self.address).map_err(|_| SolError::InvalidPubkey)?;
 
@@ -81,10 +94,11 @@ fn fmt_advanced_field_list(name: &'static str, value: &Option<Vec<String>>) -> S
 impl From<&SiwsMessage> for String {
     fn from(value: &SiwsMessage) -> Self {
         let message_required: String = format!(
-            "{domain} wants you to sign in with your Solana account:\n\
+            "{domain}{preamble}\n\
             {address}",
             domain = value.domain,
-            address = value.address
+            address = value.address,
+            preamble = PREAMBLE
         );
 
         let message_statement: String = match &value.statement {
@@ -92,18 +106,18 @@ impl From<&SiwsMessage> for String {
             None => String::new(),
         };
 
-        let uri = fmt_advanced_field("URI", &value.uri);
-        let version = fmt_advanced_field("Version", &value.version);
-        let chain_id = fmt_advanced_field("Chain ID", &value.chain_id);
-        let nonce = fmt_advanced_field("Nonce", &value.nonce);
-        let issued_at = fmt_advanced_field("Issued At", &value.issued_at);
-        let expiration_time = fmt_advanced_field("Expiration Time", &value.expiration_time);
-        let not_before = fmt_advanced_field("Not Before", &value.not_before);
-        let request_id = fmt_advanced_field("Request ID", &value.request_id);
-        let resources = fmt_advanced_field_list("Resources", &value.resources);
+        let uri = fmt_advanced_field(URI_TAG, &value.uri);
+        let version = fmt_advanced_field(VERSION_TAG, &value.version);
+        let chain_id = fmt_advanced_field(CHAIN_TAG, &value.chain_id);
+        let nonce = fmt_advanced_field(NONCE_TAG, &value.nonce);
+        let issued_at = fmt_advanced_field(IAT_TAG, &value.issued_at);
+        let expiration_time = fmt_advanced_field(EXP_TAG, &value.expiration_time);
+        let not_before = fmt_advanced_field(NBF_TAG, &value.not_before);
+        let request_id = fmt_advanced_field(RID_TAG, &value.request_id);
+        let resources = fmt_advanced_field_list(RES_TAG, &value.resources);
 
         let advanced_fields: String = format!(
-            "\n\
+            "\
             {uri}\
             {version}\
             {chain_id}\
@@ -116,6 +130,13 @@ impl From<&SiwsMessage> for String {
             "
         );
 
+        let advanced_fields: String = if !advanced_fields.is_empty() {
+            // Prefix advanced_fields with newline if any exist
+            format!("\n{advanced_fields}")
+        } else {
+            String::new()
+        };
+
         format!(
             "\
             {message_required}\
@@ -123,6 +144,53 @@ impl From<&SiwsMessage> for String {
             {advanced_fields}\
             "
         )
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Formatting Error: {0}")]
+    Format(&'static str),
+}
+
+impl TryFrom<&Vec<u8>> for SiwsMessage {
+    type Error = ParseError;
+
+    fn try_from(value: &Vec<u8>) -> Result<Self, Self::Error> {
+        let message_string: String = std::str::from_utf8(value)
+            .expect("Message should be valid UTF-8 byte array!")
+            .into();
+
+        SiwsMessage::from_str(&message_string)
+    }
+}
+
+impl FromStr for SiwsMessage {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut lines = s.split('\n');
+
+        // Get domain - no further checks on domain yet
+        let domain = lines
+            .next()
+            .and_then(|preamble| preamble.strip_suffix(PREAMBLE))
+            .map(|s| s.to_string())
+            .ok_or(ParseError::Format("Missing Preamble Line"))?;
+
+        let address = lines
+            .next()
+            .map(|s| s.to_string())
+            .ok_or(ParseError::Format("Missing Address Line"))?;
+
+        // Skip the new line:
+        lines.next();
+
+        Ok(SiwsMessage {
+            domain,
+            address,
+            ..Self::default()
+        })
     }
 }
 
