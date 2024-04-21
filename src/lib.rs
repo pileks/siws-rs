@@ -53,18 +53,18 @@ mod tests {
     #[test]
     fn works_2() {
         let msg = SiwsMessage {
-            address: "Jure".into(),
+            domain: String::from("localhost:1337"),
+            address: "testaddr".into(),
+            statement: Some("test_statement".into()),
+            uri: Some("test_uri".into()),
+            version: Some("test_version".into()),
             chain_id: Some("mainnet".into()),
-            domain: String::from("localhost"),
-            resources: None,
-            expiration_time: None,
-            issued_at: None,
-            nonce: Some("Asdf".into()),
-            not_before: None,
-            request_id: None,
-            statement: Some("Test".into()),
-            uri: None,
-            version: None,
+            nonce: Some("test_nonce".into()),
+            issued_at: Some("test_iat".into()),
+            expiration_time: Some("test_exp".into()),
+            not_before: Some("test_nbf".into()),
+            request_id: Some("test_rid".into()),
+            resources: vec!["test1".into(), "test2".into()],
         };
 
         let msg_string = String::from(&msg);

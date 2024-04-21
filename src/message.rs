@@ -51,7 +51,7 @@ pub struct SiwsMessage {
     pub request_id: Option<String>,
 
     // List of information or references to information the user wishes to have resolved as part of the authentication by the relying party; express as RFC 3986 URIs and separated by \n.
-    pub resources: Option<Vec<String>>,
+    pub resources: Vec<String>,
 }
 
 impl SiwsMessage {
@@ -69,26 +69,25 @@ impl SiwsMessage {
 
 fn fmt_advanced_field(name: &'static str, value: &Option<String>) -> String {
     match value {
-        Some(v) => format!("\n{name}: {v}"),
+        Some(v) => format!("\n{name}{v}"),
         None => String::new(),
     }
 }
 
-fn fmt_advanced_field_list(name: &'static str, value: &Option<Vec<String>>) -> String {
-    match value {
-        Some(v) => {
-            let field_name: String = format!("\n{name}:");
-
-            let list_values = v
-                .iter()
-                .map(|x| format!("\n-{x}"))
-                .collect::<Vec<String>>()
-                .join("");
-
-            format!("{field_name}{list_values}")
-        }
-        None => String::new(),
+fn fmt_advanced_field_list(name: &'static str, value: &[String]) -> String {
+    if value.is_empty() {
+        return String::from("");
     }
+
+    let field_name: String = format!("\n{name}");
+
+    let list_values = value
+        .iter()
+        .map(|x| format!("\n- {x}"))
+        .collect::<Vec<String>>()
+        .join("");
+
+    format!("{field_name}{list_values}")
 }
 
 impl From<&SiwsMessage> for String {
@@ -165,31 +164,145 @@ impl TryFrom<&Vec<u8>> for SiwsMessage {
     }
 }
 
+fn tag_optional<'a>(
+    tag: &'static str,
+    line: Option<&'a str>,
+) -> Result<Option<&'a str>, ParseError> {
+    match tagged(tag, line).map(Some) {
+        Err(ParseError::Format(t)) if t == tag => Ok(None),
+        r => r,
+    }
+}
+
+fn tagged<'a>(tag: &'static str, line: Option<&'a str>) -> Result<&'a str, ParseError> {
+    line.and_then(|l| l.strip_prefix(tag))
+        .ok_or(ParseError::Format(tag))
+}
+
 impl FromStr for SiwsMessage {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut lines = s.split('\n');
 
-        // Get domain - no further checks on domain yet
+        // Get domain
         let domain = lines
             .next()
             .and_then(|preamble| preamble.strip_suffix(PREAMBLE))
             .map(|s| s.to_string())
             .ok_or(ParseError::Format("Missing Preamble Line"))?;
 
+        // Get address
         let address = lines
             .next()
             .map(|s| s.to_string())
             .ok_or(ParseError::Format("Missing Address Line"))?;
 
-        // Skip the new line:
+        // Skip the new line
         lines.next();
+
+        // Get statement or none
+        let statement = match lines.next() {
+            None => None,
+            Some("") => None,
+            Some(s) => {
+                // Consume empty line after statement (if any)
+                lines.next();
+                Some(s.to_string())
+            }
+        };
+
+        let mut line = lines.next();
+
+        let uri = match tag_optional(URI_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let version = match tag_optional(VERSION_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let chain_id = match tag_optional(CHAIN_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let nonce = match tag_optional(NONCE_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let issued_at = match tag_optional(IAT_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let expiration_time = match tag_optional(EXP_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let not_before = match tag_optional(NBF_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let request_id = match tag_optional(RID_TAG, line)? {
+            Some(exp) => {
+                line = lines.next();
+                Some(String::from(exp))
+            }
+            None => None,
+        };
+
+        let resources = match line {
+            Some(RES_TAG) => lines
+                .map(|s| {
+                    s.strip_prefix("- ")
+                        .map(String::from)
+                        .ok_or(ParseError::Format("Invalid resource line"))
+                })
+                .collect(),
+            Some(_) => Err(ParseError::Format("Unexpected Content")),
+            None => Ok(vec![]),
+        }?;
 
         Ok(SiwsMessage {
             domain,
             address,
-            ..Self::default()
+            statement,
+            uri,
+            version,
+            chain_id,
+            nonce,
+            issued_at,
+            expiration_time,
+            not_before,
+            request_id,
+            resources,
         })
     }
 }
