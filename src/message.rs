@@ -1,8 +1,12 @@
 use ed25519_dalek::{PublicKey, Signature};
-use std::{fmt, str::FromStr};
+use std::{
+    fmt::{self},
+    str::FromStr,
+};
 use thiserror::Error;
+use time::OffsetDateTime;
 
-use crate::{pubkey::*, signature::*};
+use crate::{pubkey::*, signature::*, timestamp::*};
 
 const PREAMBLE: &str = " wants you to sign in with your Solana account:";
 const URI_TAG: &str = "URI: ";
@@ -14,6 +18,18 @@ const EXP_TAG: &str = "Expiration Time: ";
 const NBF_TAG: &str = "Not Before: ";
 const RID_TAG: &str = "Request ID: ";
 const RES_TAG: &str = "Resources:";
+
+#[derive(Debug, Error)]
+pub enum ValidateError {
+    #[error("Message is expired.")]
+    ExpirationTime,
+
+    #[error("IssuedAt is in the future.")]
+    IssuedAt,
+
+    #[error("NotBefore is in the future.")]
+    NotBefore,
+}
 
 #[derive(Default)]
 pub struct SiwsMessage {
@@ -39,13 +55,13 @@ pub struct SiwsMessage {
     pub chain_id: Option<String>,
 
     // RFC 3339 date-time that indicates the issuance time.
-    pub issued_at: Option<String>,
+    pub issued_at: Option<TimeStamp>,
 
     // RFC 3339 date-time that indicates when the signed authentication message is no longer valid.
-    pub expiration_time: Option<String>,
+    pub expiration_time: Option<TimeStamp>,
 
     // RFC 3339 date-time that indicates when the signed authentication message starts being valid.
-    pub not_before: Option<String>,
+    pub not_before: Option<TimeStamp>,
 
     // System-specific identifier used to uniquely refer to the authentication request.
     pub request_id: Option<String>,
@@ -65,9 +81,33 @@ impl SiwsMessage {
 
         verify_sol_signature(&message_string, &signature, &pub_key)
     }
+
+    pub fn validate(&self) -> Result<(), ValidateError> {
+        let now = OffsetDateTime::now_utc();
+
+        if let Some(issued_at) = &self.issued_at {
+            if issued_at > &now {
+                return Err(ValidateError::IssuedAt);
+            }
+        }
+
+        if let Some(expiration_time) = &self.expiration_time {
+            if expiration_time > &now {
+                return Err(ValidateError::ExpirationTime);
+            }
+        }
+
+        if let Some(not_before) = &self.not_before {
+            if not_before < &now {
+                return Err(ValidateError::NotBefore);
+            }
+        }
+
+        Ok(())
+    }
 }
 
-fn fmt_advanced_field(name: &'static str, value: &Option<String>) -> String {
+fn fmt_advanced_field<T: std::fmt::Display>(name: &'static str, value: &Option<T>) -> String {
     match value {
         Some(v) => format!("\n{name}{v}"),
         None => String::new(),
@@ -249,7 +289,10 @@ impl FromStr for SiwsMessage {
         let issued_at = match tag_optional(IAT_TAG, line)? {
             Some(exp) => {
                 line = lines.next();
-                Some(String::from(exp))
+                Some(
+                    TimeStamp::from_str(exp)
+                        .map_err(|_| ParseError::Format("Invalid timestamp"))?,
+                )
             }
             None => None,
         };
@@ -257,7 +300,10 @@ impl FromStr for SiwsMessage {
         let expiration_time = match tag_optional(EXP_TAG, line)? {
             Some(exp) => {
                 line = lines.next();
-                Some(String::from(exp))
+                Some(
+                    TimeStamp::from_str(exp)
+                        .map_err(|_| ParseError::Format("Invalid timestamp"))?,
+                )
             }
             None => None,
         };
@@ -265,7 +311,10 @@ impl FromStr for SiwsMessage {
         let not_before = match tag_optional(NBF_TAG, line)? {
             Some(exp) => {
                 line = lines.next();
-                Some(String::from(exp))
+                Some(
+                    TimeStamp::from_str(exp)
+                        .map_err(|_| ParseError::Format("Invalid timestamp"))?,
+                )
             }
             None => None,
         };
@@ -307,6 +356,7 @@ impl FromStr for SiwsMessage {
     }
 }
 
+#[derive(Debug, Error)]
 pub enum SolError {
     InvalidPubkey,
     InvalidSignature,
