@@ -17,6 +17,9 @@ const RES_TAG: &str = "Resources:";
 
 #[derive(Debug, Error)]
 pub enum ValidateError {
+    #[error("Domain mismatch.")]
+    Domain,
+
     #[error("Message is expired.")]
     ExpirationTime,
 
@@ -66,25 +69,38 @@ pub struct SiwsMessage {
     pub resources: Vec<String>,
 }
 
+#[derive(Default, Debug)]
+pub struct ValidateOptions {
+    pub time: Option<OffsetDateTime>,
+    pub domain: Option<String>,
+}
+
 impl SiwsMessage {
-    pub fn validate(&self) -> Result<(), ValidateError> {
-        let now = OffsetDateTime::now_utc();
-
-        if let Some(issued_at) = &self.issued_at {
-            if issued_at > &now {
-                return Err(ValidateError::IssuedAt);
-            }
-        }
-
-        if let Some(expiration_time) = &self.expiration_time {
-            if expiration_time > &now {
+    pub fn validate(&self, options: ValidateOptions) -> Result<(), ValidateError> {
+        if let Some(domain) = options.domain {
+            if self.domain != domain {
                 return Err(ValidateError::ExpirationTime);
             }
         }
 
-        if let Some(not_before) = &self.not_before {
-            if not_before < &now {
-                return Err(ValidateError::NotBefore);
+        // If options.time is Some, check all times against it
+        if let Some(check_time) = options.time {
+            if let Some(issued_at) = &self.issued_at {
+                if issued_at > &check_time {
+                    return Err(ValidateError::IssuedAt);
+                }
+            }
+
+            if let Some(expiration_time) = &self.expiration_time {
+                if expiration_time > &check_time {
+                    return Err(ValidateError::ExpirationTime);
+                }
+            }
+
+            if let Some(not_before) = &self.not_before {
+                if not_before < &check_time {
+                    return Err(ValidateError::NotBefore);
+                }
             }
         }
 

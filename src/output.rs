@@ -1,33 +1,26 @@
-use crate::{
-    message::{ParseError, SiwsMessage, ValidateError},
-    pubkey::SolPubkey,
-    signature::SolSignature,
-};
+use crate::message::{ParseError, ValidateError};
 use ed25519_dalek::{PublicKey, Signature};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+#[derive(Serialize, Deserialize)]
 pub struct SiwsOutput {
     pub account: SolAccount,
     pub signed_message: Vec<u8>,
-    pub signature: SolSignature,
+    pub signature: Vec<u8>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct SolAccount {
-    pub public_key: SolPubkey,
+    pub public_key: Vec<u8>,
 }
 
 impl SiwsOutput {
     pub fn verify(&self) -> Result<bool, VerifyError> {
-        let message =
-            SiwsMessage::try_from(&self.signed_message).map_err(VerifyError::MessageParse)?;
-
-        // Validate message
-        message.validate().map_err(VerifyError::MessageValidate)?;
-
-        let pubkey = PublicKey::from_bytes(&self.account.public_key.0)
+        let pubkey = PublicKey::from_bytes(&self.account.public_key)
             .map_err(|_| SiwsOutputError::InvalidPubkey)?;
 
-        let signature = Signature::from_bytes(&self.signature.0)
+        let signature = Signature::from_bytes(&self.signature)
             .map_err(|_| SiwsOutputError::InvalidSignature)?;
 
         // Verify signature
