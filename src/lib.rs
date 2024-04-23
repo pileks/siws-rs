@@ -11,6 +11,7 @@ mod tests {
     use crate::{
         message::*,
         output::{SiwsOutput, SolAccount},
+        pubkey, signature,
         timestamp::TimeStamp,
     };
     use ed25519_dalek::{ed25519::signature::SignerMut, Keypair};
@@ -41,9 +42,9 @@ mod tests {
 
         let output = SiwsOutput {
             account: SolAccount {
-                public_key: crate::pubkey::SolPubkey::from(keypair.public.to_bytes()),
+                public_key: pubkey::SolPubkey::from(keypair.public.to_bytes()),
             },
-            signature: Vec::from(signature_bytes),
+            signature: signature::SolSignature(signature_bytes),
             signed_message: Vec::from(message_bytes),
         };
 

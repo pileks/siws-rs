@@ -171,6 +171,18 @@ impl From<&SiwsMessage> for String {
     }
 }
 
+impl TryFrom<&[u8]> for SiwsMessage {
+    type Error = ParseError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let message_string: String = std::str::from_utf8(value)
+            .expect("Message should be valid UTF-8 byte array!")
+            .into();
+
+        SiwsMessage::from_str(&message_string)
+    }
+}
+
 impl TryFrom<&Vec<u8>> for SiwsMessage {
     type Error = ParseError;
 

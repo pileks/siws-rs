@@ -1,4 +1,3 @@
-use serde::Serialize;
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -47,7 +46,7 @@ impl TryFrom<&str> for SolPubkey {
     }
 }
 
-#[derive(Error, Debug, Serialize, Clone, PartialEq, Eq)]
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ParsePubkeyError {
     #[error("String is the wrong size")]
     WrongSize,
