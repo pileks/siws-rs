@@ -1,5 +1,5 @@
 use crate::{
-    message::{ParseError, SiwsMessage, SolError, ValidateError},
+    message::{ParseError, SiwsMessage, ValidateError},
     pubkey::SolPubkey,
 };
 use ed25519_dalek::{PublicKey, Signature};
@@ -20,19 +20,21 @@ impl SiwsOutput {
         let message =
             SiwsMessage::try_from(&self.signed_message).map_err(VerifyError::MessageParse)?;
 
-        // Ensure message is valid
-        message.validate()?;
+        // Validate message
+        message
+            .validate()
+            .map_err(VerifyError::MessageValidate)?;
 
         let pubkey = PublicKey::from_bytes(&self.account.public_key.0)
-            .map_err(|_| SolError::InvalidPubkey)?;
+            .map_err(|_| SiwsOutputError::InvalidPubkey)?;
 
-        let signature =
-            Signature::from_bytes(&self.signature).map_err(|_| SolError::InvalidSignature)?;
+        let signature = Signature::from_bytes(&self.signature)
+            .map_err(|_| SiwsOutputError::InvalidSignature)?;
 
         // Verify signature
         pubkey
             .verify_strict(&self.signed_message, &signature)
-            .map_err(|_| SolError::VerificationFailure)?;
+            .map_err(|_| VerifyError::VerificationFailure)?;
 
         Ok(true)
     }
@@ -50,5 +52,16 @@ pub enum VerifyError {
     SignatureParse(&'static str),
 
     #[error("Solana Error: {0}")]
-    Solana(#[from] SolError),
+    SiwsOutput(#[from] SiwsOutputError),
+
+    #[error("Signature verification failed")]
+    VerificationFailure,
+}
+
+#[derive(Debug, Error)]
+pub enum SiwsOutputError {
+    #[error("Invalid public key")]
+    InvalidPubkey,
+    #[error("Invalid signature")]
+    InvalidSignature,
 }

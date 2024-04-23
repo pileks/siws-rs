@@ -58,7 +58,7 @@ mod tests {
     #[test]
     fn works_2() {
         let msg = SiwsMessage {
-            domain: String::from("localhost:1337"),
+            domain: String::from("www.example.com"),
             address: "testaddr".into(),
             statement: Some("test_statement".into()),
             uri: Some("test_uri".into()),

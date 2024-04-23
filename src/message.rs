@@ -1,7 +1,4 @@
-use std::{
-    fmt::{self},
-    str::FromStr,
-};
+use std::str::FromStr;
 use thiserror::Error;
 use time::OffsetDateTime;
 
@@ -174,12 +171,6 @@ impl From<&SiwsMessage> for String {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum ParseError {
-    #[error("Formatting Error: {0}")]
-    Format(&'static str),
-}
-
 impl TryFrom<&Vec<u8>> for SiwsMessage {
     type Error = ParseError;
 
@@ -190,21 +181,6 @@ impl TryFrom<&Vec<u8>> for SiwsMessage {
 
         SiwsMessage::from_str(&message_string)
     }
-}
-
-fn tag_optional<'a>(
-    tag: &'static str,
-    line: Option<&'a str>,
-) -> Result<Option<&'a str>, ParseError> {
-    match tagged(tag, line).map(Some) {
-        Err(ParseError::Format(t)) if t == tag => Ok(None),
-        r => r,
-    }
-}
-
-fn tagged<'a>(tag: &'static str, line: Option<&'a str>) -> Result<&'a str, ParseError> {
-    line.and_then(|l| l.strip_prefix(tag))
-        .ok_or(ParseError::Format(tag))
 }
 
 impl FromStr for SiwsMessage {
@@ -344,25 +320,23 @@ impl FromStr for SiwsMessage {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum SolError {
-    InvalidPubkey,
-    InvalidSignature,
-    VerificationFailure,
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Formatting Error: {0}")]
+    Format(&'static str),
 }
 
-impl fmt::Display for SolError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SolError::InvalidPubkey => write!(f, "Invalid public key"),
-            SolError::InvalidSignature => write!(f, "Invalid signature"),
-            SolError::VerificationFailure => write!(f, "Signature verification failed"),
-        }
+fn tag_optional<'a>(
+    tag: &'static str,
+    line: Option<&'a str>,
+) -> Result<Option<&'a str>, ParseError> {
+    match tagged(tag, line).map(Some) {
+        Err(ParseError::Format(t)) if t == tag => Ok(None),
+        r => r,
     }
 }
 
-impl From<SolError> for String {
-    fn from(error: SolError) -> Self {
-        error.to_string()
-    }
+fn tagged<'a>(tag: &'static str, line: Option<&'a str>) -> Result<&'a str, ParseError> {
+    line.and_then(|l| l.strip_prefix(tag))
+        .ok_or(ParseError::Format(tag))
 }
