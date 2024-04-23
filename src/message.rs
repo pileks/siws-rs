@@ -1,4 +1,3 @@
-use ed25519_dalek::{PublicKey, Signature};
 use std::{
     fmt::{self},
     str::FromStr,
@@ -6,7 +5,7 @@ use std::{
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::{pubkey::*, signature::*, timestamp::*};
+use crate::timestamp::TimeStamp;
 
 const PREAMBLE: &str = " wants you to sign in with your Solana account:";
 const URI_TAG: &str = "URI: ";
@@ -24,10 +23,10 @@ pub enum ValidateError {
     #[error("Message is expired.")]
     ExpirationTime,
 
-    #[error("IssuedAt is in the future.")]
+    #[error("issued_at is before current time.")]
     IssuedAt,
 
-    #[error("NotBefore is in the future.")]
+    #[error("not_before is before current time.")]
     NotBefore,
 }
 
@@ -71,17 +70,6 @@ pub struct SiwsMessage {
 }
 
 impl SiwsMessage {
-    pub fn verify(&self, signature: &str) -> Result<bool, SolError> {
-        let message_string: String = self.into();
-
-        let signature =
-            SolSignature::from_str(signature).map_err(|_| SolError::InvalidSignature)?;
-
-        let pub_key = SolPubkey::from_str(&self.address).map_err(|_| SolError::InvalidPubkey)?;
-
-        verify_sol_signature(&message_string, &signature, &pub_key)
-    }
-
     pub fn validate(&self) -> Result<(), ValidateError> {
         let now = OffsetDateTime::now_utc();
 
@@ -377,22 +365,4 @@ impl From<SolError> for String {
     fn from(error: SolError) -> Self {
         error.to_string()
     }
-}
-
-fn verify_sol_signature(
-    message: &str,
-    signature: &SolSignature,
-    pubkey: &SolPubkey,
-) -> Result<bool, SolError> {
-    // Create a PublicKey from the Solana public key
-    let pubkey = PublicKey::from_bytes(&pubkey.0).map_err(|_| SolError::InvalidPubkey)?;
-
-    // Create a Signature from the Solana signature
-    let signature = Signature::from_bytes(&signature.0).map_err(|_| SolError::InvalidSignature)?;
-
-    // Verify the signature
-    pubkey
-        .verify_strict(message.as_bytes(), &signature)
-        .map(|_| true) // If verification is successful, map to true
-        .map_err(|_| SolError::VerificationFailure) // Handle any verification failure
 }
