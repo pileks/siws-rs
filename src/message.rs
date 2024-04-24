@@ -73,6 +73,7 @@ pub struct SiwsMessage {
 pub struct ValidateOptions {
     pub time: Option<OffsetDateTime>,
     pub domain: Option<String>,
+    pub nonce: Option<String>,
 }
 
 impl SiwsMessage {
@@ -80,6 +81,14 @@ impl SiwsMessage {
         if let Some(domain) = options.domain {
             if self.domain != domain {
                 return Err(ValidateError::ExpirationTime);
+            }
+        }
+
+        if let Some(options_nonce) = &options.nonce {
+            if let Some(message_nonce) = &self.nonce {
+                if message_nonce != options_nonce {
+                    return Err(ValidateError::ExpirationTime);
+                }
             }
         }
 

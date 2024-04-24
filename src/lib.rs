@@ -1,5 +1,5 @@
 pub mod message;
 pub mod output;
-pub mod pubkey;
-pub mod signature;
+mod pubkey;
+mod signature;
 pub mod timestamp;
