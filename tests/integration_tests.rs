@@ -51,9 +51,9 @@ fn verify_from_hardcoded_message() -> Result<(), VerifyError> {
 
 #[test]
 fn verify_from_json_message() -> Result<(), VerifyError> {
-    let a = include_str!("test_message.json");
+    let json = include_str!("test_message.json");
 
-    let output: SiwsOutput = serde_json::from_str(a).unwrap();
+    let output: SiwsOutput = serde_json::from_str(json).unwrap();
 
     output.verify()?;
 

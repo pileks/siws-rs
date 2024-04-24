@@ -19,13 +19,15 @@ SIWS exposes two main structs - `SiwsMessage` for message validation, and `SiwsO
 
 `SiwsMessage` is analogous to Solana Wallet Standard's `SolanaSignInInput`, while `SiwsOutput` is analogous to `SolanaSignInOutput`.
 
-Using these, you can verify the sign in request, and validate the sign-in message.
-
-### End-to-end example
+Using these, you can verify the sign in request, and validate the sign-in message. 
 
 You will mainly want to use the `SiwsOutput` struct, as its primary purpose is to provide you with simple methods to verify its signature.
 
-The below example code shows a complete program using `actix-web` and `siws` to receive a JSON object containing the SIWS Output, creating a SIWS message from it, verifying the signature and validating the message.
+However, if you wish to validate the SIWS Message (which you should), you can extract it from `SiwsOutput`'s `signed_message` field using `SiwsMessage::try_from`.
+
+### An End-to-end example
+
+The below example code shows a complete Rust program using `actix-web`, `time`, and `siws` to receive a JSON object containing the SIWS Output, creating a SIWS message from it, verifying the signature and validating the message.
 
 `Cargo.toml`:
 ```toml filename="Cargo.toml"
@@ -36,7 +38,8 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.5.1"
-siws = "0.0.1"
+siws = { path = "../../siws-rs" }
+time = "0.3.36"
 ```
 
 `src/main.rs`
@@ -44,13 +47,18 @@ siws = "0.0.1"
 use actix_web::{error, web, App, HttpServer, Result};
 use siws::message::{SiwsMessage, ValidateOptions};
 use siws::output::SiwsOutput;
+use time::OffsetDateTime;
 
 async fn validate_and_verify(output: web::Json<SiwsOutput>) -> Result<String> {
+    // Read the message from output.signed_message
     let message = SiwsMessage::try_from(&output.signed_message).map_err(error::ErrorBadRequest)?;
 
+    // Validate the message
     message
         .validate(ValidateOptions {
-            ..Default::default()
+            domain: Some("www.exmaple.com".into()), // Ensure domain is www.example.com
+            nonce: Some("1337nonce".into()), // Ensure nonce is 1337nonce
+            time: Some(OffsetDateTime::now_utc()) // Validate IAT, EXP, and NBF according to current time
         })
         .map_err(error::ErrorBadRequest)?;
 
@@ -69,17 +77,43 @@ async fn main() -> std::io::Result<()> {
 
 ```
 
-#### Verify sign-in with SIWS Output
+`SIWS Output` derives `serde`'s `Serialize` and `Deserialize` traits, and also automatically renames all of its fields as `camelCase` for simpler Solana Wallet support.
 
+### Verify sign-in with SIWS Output
+
+Whenever you have a SIWS Output, all you need to do is call its `verify` method to verify its signature. You can construct a SIWS Output by parsing a JSON string.
+
+See `tests/integration_tests.rs` for details.
 
 ```rust
+fn verify_from_json_message() -> Result<(), VerifyError> {
+    let json = include_str!("test_message.json");
+
+    let output: SiwsOutput = serde_json::from_str(json).unwrap();
+
+    output.verify()?; // Result<(), VerifyError>
+
+    Ok(())
+}
+```
+
+### Validate SIWS Message from SIWS Output
+
+From the previous example, if you wanted to also validate the SIWS Message against a certain domain, nonce, or time, you can do the following:
+
+```rust
+let message = SiwsMessage::try_from(&output.signed_message).map_err(error::ErrorBadRequest)?;
+
+message.validate(ValidateOptions {
+  ...
+})?; // Result<(), ValidateError>
 
 ```
 
-#### Validate SIWS Message from SIWS Output
-
 ### SIWS Message
 
+The `SiwsMessage` struct is used to serialize/deserialize the SIWS Message from/to its ABNF form.
+Additional methods are implemented to support parsing it from a `&Vec<u8>` and `&[u8]`, as Solana Wallet-signed messages usually come as UTF-8 byte arrays.
 
 #### Parse SIWS message from string
 
@@ -108,13 +142,26 @@ fn example_from_str() -> Result<(), ParseError> {
         ",
     )?;
 
+    // Do something with the message
+
     Ok(())
 }
 ```
 
-However, in the SIWS output, the message is usually encoded as a UTF-8 byte array. Thus, the SIWS message struct implements `TryFrom<&Vec<u8>>` and `TryFrom<&[u8]>`:
-```rust
+#### Serialize the SIWS message according to its ABNF
 
+You can get the ABNF-compliant string for your SIWS Message by using `String::from`:
+
+```rust
+let siws_message = SiwsMessage {
+    domain: "www.exmaple.com".into(),
+    address: "someaddress".into(),
+    ..Default::default()
+};
+
+let message_string = String::from(&siws_message);
+
+print!("{}", message_string);
 ```
 
 ## Contributing
