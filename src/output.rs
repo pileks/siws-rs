@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SiwsOutput {
     pub account: SolAccount,
     pub signed_message: Vec<u8>,
@@ -11,6 +12,7 @@ pub struct SiwsOutput {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SolAccount {
     pub public_key: Vec<u8>,
 }

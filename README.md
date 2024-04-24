@@ -2,6 +2,17 @@
 
 A simple Rust implementation of [CAIP-122](https://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-122.md) (Sign in With X) for Solana, following the [Solana Wallet Standard](https://github.com/anza-xyz/wallet-standard?tab=readme-ov-file) and [Phantom Wallet's Sign In With Solana](https://github.com/phantom/sign-in-with-solana) protocol.
 
+## Installation
+
+Inside `Cargo.toml`, include the `siws` crate as a dependency:
+
+```toml
+[dependencies]
+# ...other dependencies
+siws = "0.1.0"
+# ...other dependencies
+```
+
 ## Usage
 
 `siws-rs` exposes two main structs - `SiwsMessage` for message validation, and `SiwsOutput` for sign-in verification.

@@ -23,10 +23,10 @@ pub enum ValidateError {
     #[error("Message is expired.")]
     ExpirationTime,
 
-    #[error("issued_at is before current time.")]
+    #[error("'Issued At' is before current time.")]
     IssuedAt,
 
-    #[error("not_before is before current time.")]
+    #[error("'Not Before' is before current time.")]
     NotBefore,
 }
 
@@ -80,7 +80,7 @@ impl SiwsMessage {
     pub fn validate(&self, options: ValidateOptions) -> Result<(), ValidateError> {
         if let Some(domain) = options.domain {
             if self.domain != domain {
-                return Err(ValidateError::ExpirationTime);
+                return Err(ValidateError::Domain);
             }
         }
 
@@ -231,13 +231,13 @@ impl FromStr for SiwsMessage {
             .next()
             .and_then(|preamble| preamble.strip_suffix(PREAMBLE))
             .map(|s| s.to_string())
-            .ok_or(ParseError::Format("Missing Preamble Line"))?;
+            .ok_or(ParseError::Format("Missing or malformed Preamble Line"))?;
 
         // Get address
         let address = lines
             .next()
             .map(|s| s.to_string())
-            .ok_or(ParseError::Format("Missing Address Line"))?;
+            .ok_or(ParseError::Format("Missing or malformed Address Line"))?;
 
         // Skip the new line
         lines.next();
@@ -292,7 +292,7 @@ impl FromStr for SiwsMessage {
                 line = lines.next();
                 Some(
                     TimeStamp::from_str(exp)
-                        .map_err(|_| ParseError::Format("Invalid timestamp"))?,
+                        .map_err(|_| ParseError::Format("Invalid timestamp for issued_at"))?,
                 )
             }
             None => None,
@@ -303,7 +303,7 @@ impl FromStr for SiwsMessage {
                 line = lines.next();
                 Some(
                     TimeStamp::from_str(exp)
-                        .map_err(|_| ParseError::Format("Invalid timestamp"))?,
+                        .map_err(|_| ParseError::Format("Invalid timestamp for expiration_time"))?,
                 )
             }
             None => None,
@@ -314,7 +314,7 @@ impl FromStr for SiwsMessage {
                 line = lines.next();
                 Some(
                     TimeStamp::from_str(exp)
-                        .map_err(|_| ParseError::Format("Invalid timestamp"))?,
+                        .map_err(|_| ParseError::Format("Invalid timestamp for not_before"))?,
                 )
             }
             None => None,
