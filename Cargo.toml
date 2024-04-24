@@ -1,6 +1,14 @@
 [package]
 name = "siws"
-version = "0.1.0"
+version = "0.0.1"
+license = "MIT"
+description = "Lightweight Sign in With Solana library adhering to the Solana Wallet Standard."
+homepage = "https://github.com/pileks/siws-rs"
+repository = "https://github.com/pileks/siws-rs"
+readme = "README.md"
+authors = ["Jure Granić-Skender | Pileks"]
+keywords = ["solana", "sign-in", "siws"]
+categories = ["authentication", "cryptography::cryptocurrencies"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
