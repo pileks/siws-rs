@@ -9,7 +9,7 @@ SIWS can be easily installed by including the `siws` crate as a dependency insid
 ```toml
 [dependencies]
 # ...other dependencies
-siws = "0.1.0"
+siws = "0.0.1"
 # ...other dependencies
 ```
 
