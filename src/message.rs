@@ -15,7 +15,10 @@ const NBF_TAG: &str = "Not Before: ";
 const RID_TAG: &str = "Request ID: ";
 const RES_TAG: &str = "Resources:";
 
-#[derive(Debug, Error)]
+const ERR_MSG_PREAMBLE: &str = "Missing or malformed Preamble Line";
+const ERR_MSG_ADDR: &str = "Missing or malformed Address Line";
+
+#[derive(Debug, Error, PartialEq)]
 pub enum ValidateError {
     #[error("Domain mismatch.")]
     Domain,
@@ -30,7 +33,7 @@ pub enum ValidateError {
     NotBefore,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct SiwsMessage {
     // RFC 4501 dnsauthority that is requesting the signing.
     pub domain: String,
@@ -231,13 +234,13 @@ impl FromStr for SiwsMessage {
             .next()
             .and_then(|preamble| preamble.strip_suffix(PREAMBLE))
             .map(|s| s.to_string())
-            .ok_or(ParseError::Format("Missing or malformed Preamble Line"))?;
+            .ok_or(ParseError::Format(ERR_MSG_PREAMBLE))?;
 
         // Get address
         let address = lines
             .next()
             .map(|s| s.to_string())
-            .ok_or(ParseError::Format("Missing or malformed Address Line"))?;
+            .ok_or(ParseError::Format(ERR_MSG_ADDR))?;
 
         // Skip the new line
         lines.next();
@@ -376,4 +379,45 @@ fn tag_optional<'a>(
 fn tagged<'a>(tag: &'static str, line: Option<&'a str>) -> Result<&'a str, ParseError> {
     line.and_then(|l| l.strip_prefix(tag))
         .ok_or(ParseError::Format(tag))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use matches::assert_matches;
+
+    #[test]
+    fn parse_throws_on_empty_message() {
+        let msg = "";
+
+        match SiwsMessage::from_str(msg) {
+            Ok(_) => panic!("Should return an error!"),
+            Err(e) => assert_matches!(e, ParseError::Format(ERR_MSG_PREAMBLE)),
+        };
+    }
+
+    #[test]
+    fn parse_throws_on_no_address() {
+        let msg = format!("localhost{PREAMBLE}");
+
+        match SiwsMessage::from_str(&msg) {
+            Ok(_) => panic!("Should return an error!"),
+            Err(e) => assert_matches!(e, ParseError::Format(ERR_MSG_ADDR)),
+        };
+    }
+
+    #[test]
+    fn minimal_parse() {
+        let domain = "localhost";
+        let addr = "asdf";
+        let msg = format!("{domain}{PREAMBLE}\n{addr}");
+
+        match SiwsMessage::from_str(&msg) {
+            Ok(m) => {
+                assert_eq!(domain, m.domain);
+                assert_eq!(addr, m.address);
+            }
+            Err(_) => panic!("Should not error!"),
+        };
+    }
 }

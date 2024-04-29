@@ -25,6 +25,7 @@ serde_json = "1.0.115"
 rand = "0.7.0"
 rand_chacha = { version = "0.3.1" }
 getrandom = { version = "0.2.10", features = ["custom"] }
+matches = "0.1.10"
 
 # This patch is needed due to version conflicts around the zeroize crate
 # More info: https://github.com/solana-labs/solana/blob/master/Cargo.toml#L514
