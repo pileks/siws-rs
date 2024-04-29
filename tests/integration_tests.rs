@@ -1,4 +1,7 @@
+use std::str::FromStr;
+
 use ed25519_dalek::{ed25519::signature::SignerMut, Keypair};
+use iri_string::types::UriString;
 use rand::rngs::OsRng;
 use siws::{
     message::SiwsMessage,
@@ -26,7 +29,10 @@ fn verify_from_hardcoded_message() -> Result<(), VerifyError> {
         expiration_time: Some(TimeStamp::from(OffsetDateTime::now_utc())),
         not_before: Some(TimeStamp::from(OffsetDateTime::now_utc())),
         request_id: Some("test_rid".into()),
-        resources: vec!["test1".into(), "test2".into()],
+        resources: vec![
+            UriString::from_str("https://www.example1.com").map_err(|_| VerifyError::Infallible)?,
+            UriString::from_str("https://www.example2.com").map_err(|_| VerifyError::Infallible)?,
+        ],
     };
 
     let siws_message_as_string = String::from(&siws_message);
