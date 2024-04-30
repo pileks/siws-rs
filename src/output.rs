@@ -50,6 +50,9 @@ pub enum VerifyError {
 
     #[error("Signature verification failed")]
     VerificationFailure,
+
+    #[error("")]
+    Infallible
 }
 
 #[derive(Debug, Error)]

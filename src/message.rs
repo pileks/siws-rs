@@ -1,4 +1,5 @@
-use std::str::FromStr;
+use iri_string::types::UriString;
+use std::{fmt::Display, str::FromStr};
 use thiserror::Error;
 use time::OffsetDateTime;
 
@@ -33,7 +34,7 @@ pub enum ValidateError {
     NotBefore,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct SiwsMessage {
     // RFC 4501 dnsauthority that is requesting the signing.
     pub domain: String,
@@ -69,7 +70,7 @@ pub struct SiwsMessage {
     pub request_id: Option<String>,
 
     // List of information or references to information the user wishes to have resolved as part of the authentication by the relying party; express as RFC 3986 URIs and separated by \n.
-    pub resources: Vec<String>,
+    pub resources: Vec<UriString>,
 }
 
 #[derive(Default, Debug)]
@@ -127,7 +128,7 @@ fn fmt_advanced_field<T: std::fmt::Display>(name: &'static str, value: &Option<T
     }
 }
 
-fn fmt_advanced_field_list(name: &'static str, value: &[String]) -> String {
+fn fmt_advanced_field_list(name: &'static str, value: &[UriString]) -> String {
     if value.is_empty() {
         return String::from("");
     }
@@ -141,6 +142,12 @@ fn fmt_advanced_field_list(name: &'static str, value: &[String]) -> String {
         .join("");
 
     format!("{field_name}{list_values}")
+}
+
+impl Display for SiwsMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from(self))
+    }
 }
 
 impl From<&SiwsMessage> for String {
@@ -221,6 +228,13 @@ impl TryFrom<&Vec<u8>> for SiwsMessage {
 
         SiwsMessage::from_str(&message_string)
     }
+}
+
+fn parse_line<S: FromStr<Err = E>, E: Into<ParseError>>(
+    tag: &'static str,
+    line: Option<&str>,
+) -> Result<S, ParseError> {
+    tagged(tag, line).and_then(|s| S::from_str(s).map_err(|e| e.into()))
 }
 
 impl FromStr for SiwsMessage {
@@ -332,13 +346,7 @@ impl FromStr for SiwsMessage {
         };
 
         let resources = match line {
-            Some(RES_TAG) => lines
-                .map(|s| {
-                    s.strip_prefix("- ")
-                        .map(String::from)
-                        .ok_or(ParseError::Format("Invalid resource line"))
-                })
-                .collect(),
+            Some(RES_TAG) => lines.map(|s| parse_line("- ", Some(s))).collect(),
             Some(_) => Err(ParseError::Format("Unexpected Content")),
             None => Ok(vec![]),
         }?;
@@ -364,6 +372,9 @@ impl FromStr for SiwsMessage {
 pub enum ParseError {
     #[error("Formatting Error: {0}")]
     Format(&'static str),
+    #[error("Invalid URI: {0}")]
+    /// URI field is non-conformant.
+    Uri(#[from] iri_string::validate::Error),
 }
 
 fn tag_optional<'a>(
