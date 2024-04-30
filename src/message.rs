@@ -1,5 +1,5 @@
 use iri_string::types::UriString;
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 use thiserror::Error;
 use time::OffsetDateTime;
 
@@ -34,7 +34,7 @@ pub enum ValidateError {
     NotBefore,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct SiwsMessage {
     // RFC 4501 dnsauthority that is requesting the signing.
     pub domain: String,
@@ -142,6 +142,12 @@ fn fmt_advanced_field_list(name: &'static str, value: &[UriString]) -> String {
         .join("");
 
     format!("{field_name}{list_values}")
+}
+
+impl Display for SiwsMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", String::from(self))
+    }
 }
 
 impl From<&SiwsMessage> for String {

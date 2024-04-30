@@ -19,7 +19,7 @@ ed25519-dalek = "1.0.1"
 bs58 = "0.5.1"
 thiserror = "1.0.58"
 time = { version = "0.3.36", features = ["parsing", "formatting"] }
-iri-string = "0.7"
+iri-string = "0.6"
 
 [dev-dependencies]
 serde_json = "1.0.115"
