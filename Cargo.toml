@@ -1,6 +1,6 @@
 [package]
 name = "siws"
-version = "0.0.1"
+version = "0.0.2"
 license = "MIT"
 description = "Lightweight Sign in With Solana library adhering to the Solana Wallet Standard."
 homepage = "https://github.com/pileks/siws-rs"
