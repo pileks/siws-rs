@@ -1,0 +1,16 @@
+localhost wants you to sign in with your Solana account:
+0000000000000000000000000000000000000000
+
+statement!
+
+URI: did:key:example
+Version: 1
+Chain ID: testnet
+Nonce: mynonce1
+Issued At: 2022-06-21T12:00:00.000Z
+Expiration Time: 2022-06-21T12:00:00.000Z
+Not Before: 2022-06-21T12:00:00.000Z
+Request ID: example1234
+Resources:
+- http://localhost/test1
+- urn:test:asdf

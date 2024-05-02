@@ -19,21 +19,6 @@ const RES_TAG: &str = "Resources:";
 const ERR_MSG_PREAMBLE: &str = "Missing or malformed Preamble Line";
 const ERR_MSG_ADDR: &str = "Missing or malformed Address Line";
 
-#[derive(Debug, Error, PartialEq)]
-pub enum ValidateError {
-    #[error("Domain mismatch.")]
-    Domain,
-
-    #[error("Message is expired.")]
-    ExpirationTime,
-
-    #[error("'Issued At' is before current time.")]
-    IssuedAt,
-
-    #[error("'Not Before' is before current time.")]
-    NotBefore,
-}
-
 #[derive(Default, Debug, Clone)]
 pub struct SiwsMessage {
     // RFC 4501 dnsauthority that is requesting the signing.
@@ -80,6 +65,34 @@ pub struct ValidateOptions {
     pub nonce: Option<String>,
 }
 
+#[derive(Debug, Error, PartialEq)]
+pub enum ValidateError {
+    #[error("Domain mismatch.")]
+    Domain,
+
+    #[error("Message is expired.")]
+    ExpirationTime,
+
+    #[error("'Issued At' is before current time.")]
+    IssuedAt,
+
+    #[error("'Not Before' is before current time.")]
+    NotBefore,
+}
+
+#[derive(Error, Debug)]
+pub enum ParseError {
+    #[error("Formatting Error: {0}")]
+    Format(&'static str),
+
+    #[error("Invalid TimeStamp: {0}")]
+    TimeStamp(#[from] time::Error),
+
+    #[error("Invalid URI: {0}")]
+    /// URI field is non-conformant.
+    Uri(#[from] iri_string::validate::Error),
+}
+
 impl SiwsMessage {
     pub fn validate(&self, options: ValidateOptions) -> Result<(), ValidateError> {
         if let Some(domain) = options.domain {
@@ -119,29 +132,6 @@ impl SiwsMessage {
 
         Ok(())
     }
-}
-
-fn fmt_advanced_field<T: std::fmt::Display>(name: &'static str, value: &Option<T>) -> String {
-    match value {
-        Some(v) => format!("\n{name}{v}"),
-        None => String::new(),
-    }
-}
-
-fn fmt_advanced_field_list(name: &'static str, value: &[UriString]) -> String {
-    if value.is_empty() {
-        return String::from("");
-    }
-
-    let field_name: String = format!("\n{name}");
-
-    let list_values = value
-        .iter()
-        .map(|x| format!("\n- {x}"))
-        .collect::<Vec<String>>()
-        .join("");
-
-    format!("{field_name}{list_values}")
 }
 
 impl Display for SiwsMessage {
@@ -230,13 +220,6 @@ impl TryFrom<&Vec<u8>> for SiwsMessage {
     }
 }
 
-fn parse_line<S: FromStr<Err = E>, E: Into<ParseError>>(
-    tag: &'static str,
-    line: Option<&str>,
-) -> Result<S, ParseError> {
-    tagged(tag, line).and_then(|s| S::from_str(s).map_err(|e| e.into()))
-}
-
 impl FromStr for SiwsMessage {
     type Err = ParseError;
 
@@ -259,18 +242,32 @@ impl FromStr for SiwsMessage {
         // Skip the new line
         lines.next();
 
+        // Start reading all those nice optional fields
+        let mut line = lines.next();
+
+        println!("Line: {:?}", line);
+
         // Get statement or none
-        let statement = match lines.next() {
+        let statement = match line {
             None => None,
             Some("") => None,
             Some(s) => {
-                // Consume empty line after statement (if any)
-                lines.next();
-                Some(s.to_string())
+                if starts_with_advanced_field_tag(s) {
+                    // Statement is none if we're already reading an advanced field tag
+                    None
+                } else {
+                    // Consume empty line after statement (if any)
+                    lines.next();
+
+                    // The next line after the empty line is either nothing or an advanced field
+                    line = lines.next();
+
+                    Some(s.to_string())
+                }
             }
         };
 
-        let mut line = lines.next();
+        println!("Statement: {:?}", statement);
 
         let uri = match tag_optional(URI_TAG, line)? {
             Some(exp) => {
@@ -307,10 +304,7 @@ impl FromStr for SiwsMessage {
         let issued_at = match tag_optional(IAT_TAG, line)? {
             Some(exp) => {
                 line = lines.next();
-                Some(
-                    TimeStamp::from_str(exp)
-                        .map_err(|_| ParseError::Format("Invalid timestamp for issued_at"))?,
-                )
+                Some(exp.parse()?)
             }
             None => None,
         };
@@ -318,10 +312,7 @@ impl FromStr for SiwsMessage {
         let expiration_time = match tag_optional(EXP_TAG, line)? {
             Some(exp) => {
                 line = lines.next();
-                Some(
-                    TimeStamp::from_str(exp)
-                        .map_err(|_| ParseError::Format("Invalid timestamp for expiration_time"))?,
-                )
+                Some(exp.parse()?)
             }
             None => None,
         };
@@ -329,10 +320,7 @@ impl FromStr for SiwsMessage {
         let not_before = match tag_optional(NBF_TAG, line)? {
             Some(exp) => {
                 line = lines.next();
-                Some(
-                    TimeStamp::from_str(exp)
-                        .map_err(|_| ParseError::Format("Invalid timestamp for not_before"))?,
-                )
+                Some(exp.parse()?)
             }
             None => None,
         };
@@ -345,9 +333,9 @@ impl FromStr for SiwsMessage {
             None => None,
         };
 
-        let resources = match line {
+        let resources: Vec<UriString> = match line {
             Some(RES_TAG) => lines.map(|s| parse_line("- ", Some(s))).collect(),
-            Some(_) => Err(ParseError::Format("Unexpected Content")),
+            Some(_) => Err(ParseError::Format("Unexpected content")),
             None => Ok(vec![]),
         }?;
 
@@ -368,13 +356,34 @@ impl FromStr for SiwsMessage {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum ParseError {
-    #[error("Formatting Error: {0}")]
-    Format(&'static str),
-    #[error("Invalid URI: {0}")]
-    /// URI field is non-conformant.
-    Uri(#[from] iri_string::validate::Error),
+fn fmt_advanced_field<T: std::fmt::Display>(name: &'static str, value: &Option<T>) -> String {
+    match value {
+        Some(v) => format!("\n{name}{v}"),
+        None => String::new(),
+    }
+}
+
+fn fmt_advanced_field_list(name: &'static str, value: &[UriString]) -> String {
+    if value.is_empty() {
+        return String::from("");
+    }
+
+    let field_name: String = format!("\n{name}");
+
+    let list_values = value
+        .iter()
+        .map(|x| format!("\n- {x}"))
+        .collect::<Vec<String>>()
+        .join("");
+
+    format!("{field_name}{list_values}")
+}
+
+fn parse_line<S: FromStr<Err = E>, E: Into<ParseError>>(
+    tag: &'static str,
+    line: Option<&str>,
+) -> Result<S, ParseError> {
+    tagged(tag, line).and_then(|s| S::from_str(s).map_err(|e| e.into()))
 }
 
 fn tag_optional<'a>(
@@ -392,10 +401,27 @@ fn tagged<'a>(tag: &'static str, line: Option<&'a str>) -> Result<&'a str, Parse
         .ok_or(ParseError::Format(tag))
 }
 
+fn starts_with_advanced_field_tag(line: &str) -> bool {
+    line.starts_with(URI_TAG)
+        || line.starts_with(VERSION_TAG)
+        || line.starts_with(CHAIN_TAG)
+        || line.starts_with(NONCE_TAG)
+        || line.starts_with(IAT_TAG)
+        || line.starts_with(EXP_TAG)
+        || line.starts_with(NBF_TAG)
+        || line.starts_with(RID_TAG)
+        || line.starts_with(RES_TAG)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use matches::assert_matches;
+
+    const TEST_DOMAIN: &str = "localhost";
+    const TEST_ADDR: &str = "0000000000000000000000000000000000000000";
+
+    // Parsing
 
     #[test]
     fn parse_throws_on_empty_message() {
@@ -409,7 +435,7 @@ mod test {
 
     #[test]
     fn parse_throws_on_no_address() {
-        let msg = format!("localhost{PREAMBLE}");
+        let msg = format!("{TEST_DOMAIN}{PREAMBLE}");
 
         match SiwsMessage::from_str(&msg) {
             Ok(_) => panic!("Should return an error!"),
@@ -418,17 +444,62 @@ mod test {
     }
 
     #[test]
+    fn parse_throws_on_invalid_timestamp() {
+        let msg = format!("{TEST_DOMAIN}{PREAMBLE}\n{TEST_ADDR}\n\n{NBF_TAG}invalid");
+
+        match SiwsMessage::from_str(&msg) {
+            Ok(_) => panic!("Should return an error!"),
+            Err(e) => assert_matches!(e, ParseError::TimeStamp(_)),
+        };
+    }
+
+    #[test]
+    fn parse_throws_on_invalid_uri() {
+        let msg = format!("{TEST_DOMAIN}{PREAMBLE}\n{TEST_ADDR}\n\n{RES_TAG}\n- invalid");
+
+        match SiwsMessage::from_str(&msg) {
+            Ok(_) => panic!("Should return an error!"),
+            Err(e) => assert_matches!(e, ParseError::Uri(_)),
+        };
+    }
+
+    #[test]
     fn minimal_parse() {
-        let domain = "localhost";
-        let addr = "asdf";
-        let msg = format!("{domain}{PREAMBLE}\n{addr}");
+        let msg = format!("{TEST_DOMAIN}{PREAMBLE}\n{TEST_ADDR}");
 
         match SiwsMessage::from_str(&msg) {
             Ok(m) => {
-                assert_eq!(domain, m.domain);
-                assert_eq!(addr, m.address);
+                assert_eq!(TEST_DOMAIN, m.domain);
+                assert_eq!(TEST_ADDR, m.address);
             }
             Err(_) => panic!("Should not error!"),
         };
     }
+
+    #[test]
+    fn full_parse() -> Result<(), ParseError> {
+        let msg = include_str!("../tests/full_message.txt");
+
+        match SiwsMessage::from_str(msg) {
+            Ok(m) => {
+                assert_eq!(TEST_DOMAIN, m.domain);
+                assert_eq!(TEST_ADDR, m.address);
+                assert_eq!(Some("did:key:example".into()), m.uri);
+                assert_eq!(Some("1".into()), m.version);
+                assert_eq!(Some("testnet".into()), m.chain_id);
+                assert_eq!(Some("mynonce1".into()), m.nonce);
+                assert_eq!(
+                    Some(TimeStamp::from_str("2022-06-21T12:00:00.000Z")?),
+                    m.issued_at
+                );
+            }
+            Err(e) => {
+                panic!("{}", e);
+            }
+        };
+
+        Ok(())
+    }
+
+    // Validation
 }
