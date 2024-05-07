@@ -245,8 +245,6 @@ impl FromStr for SiwsMessage {
         // Start reading all those nice optional fields
         let mut line = lines.next();
 
-        println!("Line: {:?}", line);
-
         // Get statement or none
         let statement = match line {
             None => None,
@@ -266,8 +264,6 @@ impl FromStr for SiwsMessage {
                 }
             }
         };
-
-        println!("Statement: {:?}", statement);
 
         let uri = match tag_optional(URI_TAG, line)? {
             Some(exp) => {
